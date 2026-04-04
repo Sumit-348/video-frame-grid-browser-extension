@@ -1,0 +1,258 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 280px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.popup {
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.logo {
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.section {
+  margin-bottom: 14px;
+}
+
+.section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8888aa;
+  margin-bottom: 8px;
+}
+
+.domain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.domain-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+/* Toggle switch */
+.toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+
+.toggle-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  background: #333;
+  border-radius: 11px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggle-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  background: #888;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.toggle-btn.active .toggle-track {
+  background: #6c5ce7;
+}
+
+.toggle-btn.active .toggle-knob {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 14px 0;
+}
+
+/* ======================================
+   iOS-style Scroll Wheel Picker
+   ====================================== */
+
+.picker-wrapper {
+  position: relative;
+  display: flex;
+  height: 150px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.picker-column {
+  flex: 1;
+  position: relative;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.picker-column::-webkit-scrollbar {
+  display: none;
+}
+
+.picker-column-unit {
+  flex: 0 0 45%;
+}
+
+.picker-scroll {
+  /* Top/bottom padding = 2 items * 30px to center the first/last item */
+  padding: 60px 0;
+}
+
+.picker-item {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  scroll-snap-align: center;
+  transition: color 0.15s, transform 0.15s, font-weight 0.15s;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-item.selected {
+  color: #fff;
+  font-weight: 700;
+  transform: scale(1.05);
+}
+
+/* The highlight band across the middle */
+.picker-highlight {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  right: 6px;
+  height: 32px;
+  transform: translateY(-50%);
+  background: rgba(108, 92, 231, 0.15);
+  border-radius: 7px;
+  border: 1px solid rgba(108, 92, 231, 0.25);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Fade gradients top and bottom */
+.picker-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 45px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.picker-fade-top {
+  top: 0;
+  background: linear-gradient(to bottom, #1a1a2e 0%, transparent 100%);
+}
+
+.picker-fade-bottom {
+  bottom: 0;
+  background: linear-gradient(to top, #1a1a2e 0%, transparent 100%);
+}
+
+/* ====================================== */
+
+.recalibrate-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(108, 92, 231, 0.15);
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  border-radius: 8px;
+  color: #a29bfe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.recalibrate-btn:hover {
+  background: rgba(108, 92, 231, 0.25);
+  border-color: rgba(108, 92, 231, 0.5);
+}
+
+.recalibrate-btn:active {
+  transform: scale(0.98);
+}
+
+.recalibrate-btn.hidden {
+  display: none;
+}
+
+.footer {
+  text-align: center;
+  font-size: 11px;
+  color: #666;
+  padding-top: 4px;
+}
+
+kbd {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: #aaa;
+}

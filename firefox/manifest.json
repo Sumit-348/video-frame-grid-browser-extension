@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Video Frame Grid",
+  "version": "1.0.0",
+  "description": "Generate a visual contact sheet / frame grid from any video on a webpage. Press G to preview, click to seek.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{e8f1c5a0-7b3d-4f2e-9a6b-1d0c8e5f4a3b}",
+      "strict_min_version": "109.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["storage", "activeTab"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="header">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="1" y="1" width="8" height="8" rx="1.5" fill="#6c5ce7"/>
+          <rect x="11" y="1" width="8" height="8" rx="1.5" fill="#a29bfe"/>
+          <rect x="1" y="11" width="8" height="8" rx="1.5" fill="#a29bfe"/>
+          <rect x="11" y="11" width="8" height="8" rx="1.5" fill="#6c5ce7"/>
+        </svg>
+      </div>
+      <h1>Video Frame Grid</h1>
+    </div>
+
+    <div class="section">
+      <label class="section-label">Domain</label>
+      <div class="domain-row">
+        <span class="domain-name" id="domainName">—</span>
+        <button class="toggle-btn" id="domainToggle" aria-label="Toggle extension for this domain">
+          <span class="toggle-track">
+            <span class="toggle-knob"></span>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <label class="section-label">Frame interval</label>
+      <div class="picker-wrapper">
+        <div class="picker-column" id="pickerNumber">
+          <div class="picker-scroll" id="scrollNumber"></div>
+        </div>
+        <div class="picker-column picker-column-unit" id="pickerUnit">
+          <div class="picker-scroll" id="scrollUnit"></div>
+        </div>
+        <div class="picker-highlight"></div>
+        <div class="picker-fade picker-fade-top"></div>
+        <div class="picker-fade picker-fade-bottom"></div>
+      </div>
+    </div>
+
+    <button class="recalibrate-btn hidden" id="recalibrateBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M1 1v5h5"/>
+        <path d="M3.5 10a5 5 0 1 0 1-7L1 6"/>
+      </svg>
+      Recalibrate Grid
+    </button>
+
+    <div class="footer">
+      Press <kbd>G</kbd> on any page to toggle the grid
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
