@@ -1,21 +1,23 @@
 {
   "manifest_version": 3,
   "name": "Video Frame Grid",
-  "version": "1.0.0",
-  "description": "Generate a visual contact sheet / frame grid from any video on a webpage. Press G to preview, click to seek.",
-  "permissions": ["storage", "activeTab"],
+  "version": "1.1.0",
+  "description": "Generate a visual contact sheet / frame grid from any video on a webpage. Click the icon to enable, then videos auto-generate a grid.",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/icon16-disabled.png",
+    "48": "icons/icon48-disabled.png",
+    "128": "icons/icon128-disabled.png"
   },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
+      "16": "icons/icon16-disabled.png",
+      "48": "icons/icon48-disabled.png",
+      "128": "icons/icon128-disabled.png"
+    },
+    "default_title": "Video Frame Grid"
   },
   "background": {
     "service_worker": "background.js"
@@ -25,7 +27,15 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle",
-      "all_frames": true
+      "all_frames": false
     }
-  ]
+  ],
+  "commands": {
+    "trigger-grid": {
+      "suggested_key": {
+        "default": "Alt+G"
+      },
+      "description": "Generate the frame grid for the current video"
+    }
+  }
 }

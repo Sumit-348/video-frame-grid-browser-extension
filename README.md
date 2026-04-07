@@ -30,35 +30,64 @@ Install directly from Mozilla Add-ons:
 
 4. **Click "Load unpacked"** and select the **`chrome`** folder inside the repo
 
-5. The extension icon appears in your toolbar — done
+5. **Pin the extension** — click the puzzle piece in your toolbar and pin Video Frame Grid
 
 ---
 
 ## How to Use
 
-1. **Enable for a site** — Click the extension icon and toggle it **ON** for the current domain (e.g. youtube.com). The extension remembers this per site.
+### First time on a site
 
-2. **Press `G`** on any page with a video. The frame grid appears below the video player.
+1. **Click the extension icon** to open the popup, then toggle the switch **on**. The icon turns purple to show it's active for this site.
+2. The page **auto-reloads**.
+3. The frame grid appears automatically next to the video.
 
-3. **Click any thumbnail** to seek the video to that exact timestamp. It auto-plays from there.
+### On enabled sites
 
-4. **Press `G` again** to dismiss the grid.
+Once enabled, the grid is fully automatic:
 
-### Changing the Interval
+- **Navigating to a new video** — the grid regenerates automatically
+- **Auto-play next video** — the grid regenerates automatically
+- **Reloading the page** — the grid regenerates automatically
 
-Open the extension popup and use the scroll wheel picker to set your preferred interval:
+You don't need to click anything. The extension watches for video source changes and SPA navigations, then rebuilds the grid for the new video on its own.
 
-- **Left wheel** — number (1–60)
-- **Right wheel** — unit (sec / min / hrs)
+If for some reason the grid doesn't appear (a slow-loading player, an unusual site layout), you can manually trigger it via:
 
-For example: `30 sec` captures a frame every 30 seconds, `5 min` captures every 5 minutes.
+- The **"Generate / Refresh Grid"** button in the popup
+- The **keyboard shortcut** (default: `Alt+G`)
 
-After changing the interval, click **Recalibrate Grid** to regenerate with the new setting.
+### Disabling for a site
 
-### Grid Controls
+Click the icon when it's purple to turn it off. The icon returns to grayscale.
 
-- **✕** — close the grid
-- **−** — minimize to header bar only (click **+** to expand)
+---
+
+## Two Views
+
+The grid has two layouts. Use the **view toggle button** in the grid header (left of the minimize button) to switch between them. Your preference is remembered per site.
+
+### Side view (default)
+The grid sits to the **right of the video**, matching its height. Frames are stacked vertically, one per row, scrollable. Pushes the recommended videos sidebar down.
+
+### Below view
+The grid sits **directly below the video**, matching its width. Frames are arranged in **3 columns**. Pushes the title and description down.
+
+---
+
+## Settings
+
+Right-click the extension icon and choose **Options** to access settings:
+
+- **Frame interval** — iOS-style scroll wheel picker. Set any combination of 1–60 sec/min/hrs.
+- **Recalibrate Grid** — appears after changing the interval; regenerates the grid with the new value.
+- **Keyboard shortcut** — view your current shortcut and customize it.
+
+### Customizing the keyboard shortcut
+
+Click **Customize shortcut** in the Options panel. This opens your browser's extension shortcut settings page.
+
+> **Important:** Avoid common video player shortcuts like `K`, `M`, `J`, `L`, `space`, `F`, `C`, or arrow keys. Browser extensions claim shortcuts globally, so binding any of these will hijack the player's controls. Use modifier combos like `Alt+G`, `Ctrl+Shift+V`, etc.
 
 ---
 
@@ -69,7 +98,7 @@ After changing the interval, click **Recalibrate Grid** to regenerate with the n
 | Standard `<video>` elements | ✅ | Full support |
 | Blob URLs | ✅ | Common streaming method |
 | HLS / DASH (no DRM) | ✅ | Still a `<video>` under the hood |
-| YouTube | ✅ | SPA navigation detection included |
+| YouTube | ✅ | SPA navigation handled |
 | Vimeo | ✅ | Works out of the box |
 | DRM-protected (Netflix, Disney+, Prime, Hulu) | ❌ | Browser blocks canvas capture by design |
 
@@ -81,33 +110,41 @@ After changing the interval, click **Recalibrate Grid** to regenerate with the n
 
 ---
 
+## What's New in 1.1.0
+
+- **Click-to-toggle popup** — pin the extension and click the icon to open a popup with a clean toggle, interval picker, generate button, and shortcut display
+- **Auto-trigger on enable** — page reloads and the grid generates automatically
+- **Automatic grid regeneration** — when a new video starts playing (SPA navigation, autoplay next, or reload), the grid rebuilds automatically with no user interaction
+- **Customizable keyboard shortcut** — replace the old hardcoded `G` key with anything you want (default `Alt+G`)
+- **Two view modes** — side view (next to the video) or below view (3-column grid under the video), per-domain memory
+- **Side view properly sized** — matches video height with scrollable frame list
+- **More accurate frame capture** — uses `requestVideoFrameCallback` and duplicate detection to fix the "same frame repeating" bug
+- **Cached frames across view switches** — toggling between side and below view no longer recaptures frames
+- **Cleaner background service worker** — better state management across tabs
+
+---
+
 ## Project Structure
 
 ```
 video-frame-grid-browser-extension/
-├── chrome/                # Chrome / Edge build (clean MV3, no warnings)
+├── chrome/                # Chrome / Edge build
 │   ├── manifest.json
 │   ├── background.js
 │   ├── content.js
-│   ├── popup.html
-│   ├── popup.js
-│   ├── popup.css
-│   └── icons/
+│   ├── options.html
+│   ├── options.js
+│   ├── options.css
+│   └── icons/             # Colored + grayscale variants
 │
-├── firefox/               # Firefox build (with gecko ID + data collection declaration)
-│   ├── manifest.json
-│   ├── background.js
-│   ├── content.js
-│   ├── popup.html
-│   ├── popup.js
-│   ├── popup.css
-│   └── icons/
+├── firefox/               # Firefox build (with gecko ID + data declaration)
+│   └── (same files)
 │
 ├── LICENSE
 └── README.md
 ```
 
-The only difference between the two folders is `manifest.json`. Chrome's manifest is pure MV3. Firefox's includes `browser_specific_settings` with the gecko extension ID and data collection permissions that Mozilla requires.
+The only differences between the two folders are in `manifest.json`. Chrome's is pure MV3. Firefox's includes `browser_specific_settings` with the gecko extension ID and data collection permissions that Mozilla requires.
 
 ---
 
@@ -116,18 +153,21 @@ The only difference between the two folders is `manifest.json`. Chrome's manifes
 - **No data collection** — everything runs locally
 - **No network requests** — zero external calls
 - **No analytics or tracking**
-- **Stores only preferences** — enabled domains and interval, in local browser storage
+- **Stores only preferences** — enabled domains, view preferences, and interval, in local browser storage
 
 ---
 
 ## How It Works
 
-1. Press `G` → extension finds the largest `<video>` element on the page
-2. Calculates frame count from video duration ÷ your interval setting
-3. Uses HTML5 Canvas to seek and capture each frame
-4. Renders the grid directly into the page DOM below the video (not as a floating overlay)
-5. Click a frame → sets `video.currentTime` and plays
-6. Your original playback position is restored after capture
+1. Click the icon → toggle on → background script saves the domain as enabled and reloads the tab
+2. On reload, content script detects the saved domain → finds the largest `<video>` element on the page
+3. Once the video has metadata, calculates frame count from duration ÷ your interval setting
+4. Pauses video, uses HTML5 Canvas + `requestVideoFrameCallback` to seek and capture each frame accurately
+5. Detects duplicate frames and re-captures if necessary
+6. Renders the grid in either side view or below view based on your per-domain preference
+7. Click a frame → sets `video.currentTime` and plays
+8. Original playback position is restored after capture
+9. **Watches for video source changes** — when you navigate to a new video, the grid auto-regenerates without any user action
 
 ---
 
