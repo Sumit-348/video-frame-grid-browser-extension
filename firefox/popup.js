@@ -34,7 +34,7 @@ let selectedUnitIndex = 0;
 // Picker
 // =============================================
 function buildColumn(scrollEl, items, labelFn) {
-  scrollEl.innerHTML = '';
+  while (scrollEl.firstChild) scrollEl.removeChild(scrollEl.firstChild);
   for (let i = 0; i < items.length; i++) {
     const div = document.createElement('div');
     div.className = 'picker-item';

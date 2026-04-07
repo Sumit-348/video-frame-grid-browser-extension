@@ -281,7 +281,7 @@
     const viewBtn = document.createElement('button');
     viewBtn.className = 'vfg-btn vfg-view-toggle';
     viewBtn.title = currentView === 'side' ? 'Switch to below view' : 'Switch to side view';
-    viewBtn.innerHTML = currentView === 'side' ? viewIconBelow() : viewIconSide();
+    viewBtn.appendChild(buildViewIcon(currentView));
     viewBtn.addEventListener('click', () => switchView());
 
     const minimizeBtn = document.createElement('button');
@@ -661,18 +661,27 @@
     return `${m}:${String(sec).padStart(2,'0')}`;
   }
 
-  function viewIconSide() {
-    return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="1" y="2" width="9" height="12" rx="1"/>
-      <rect x="11.5" y="2" width="3.5" height="12" rx="0.5"/>
-    </svg>`;
+  function makeSvgEl(tag, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
   }
 
-  function viewIconBelow() {
-    return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="2" y="1" width="12" height="8" rx="1"/>
-      <rect x="2" y="10.5" width="12" height="4.5" rx="0.5"/>
-    </svg>`;
+  function buildViewIcon(view) {
+    const svg = makeSvgEl('svg', {
+      width: '14', height: '14', viewBox: '0 0 16 16',
+      fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5'
+    });
+    if (view === 'side') {
+      // Icon shown when current view is 'side' (toggles to 'below')
+      svg.appendChild(makeSvgEl('rect', { x: '2', y: '1', width: '12', height: '8', rx: '1' }));
+      svg.appendChild(makeSvgEl('rect', { x: '2', y: '10.5', width: '12', height: '4.5', rx: '0.5' }));
+    } else {
+      // Icon shown when current view is 'below' (toggles to 'side')
+      svg.appendChild(makeSvgEl('rect', { x: '1', y: '2', width: '9', height: '12', rx: '1' }));
+      svg.appendChild(makeSvgEl('rect', { x: '11.5', y: '2', width: '3.5', height: '12', rx: '0.5' }));
+    }
+    return svg;
   }
 
   function getGridCSS() {
