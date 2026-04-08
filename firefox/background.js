@@ -32,19 +32,6 @@ async function setIntervalValue(seconds) {
   await ext.storage.local.set({ captureInterval: seconds });
 }
 
-async function getDomainView(domain) {
-  const r = await ext.storage.local.get('domainViews');
-  const views = r.domainViews || {};
-  return views[domain] || 'side';
-}
-
-async function setDomainView(domain, view) {
-  const r = await ext.storage.local.get('domainViews');
-  const views = r.domainViews || {};
-  views[domain] = view;
-  await ext.storage.local.set({ domainViews: views });
-}
-
 // =============================================
 // Icon state
 // =============================================
@@ -161,22 +148,38 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'GET_DOMAIN_VIEW') {
-    getDomainView(message.domain).then((view) => sendResponse({ view }));
-    return true;
-  }
-
-  if (message.type === 'SET_DOMAIN_VIEW') {
-    setDomainView(message.domain, message.view).then(() => sendResponse({ success: true }));
-    return true;
-  }
-
   if (message.type === 'REGENERATE_GRID') {
     ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) ext.tabs.sendMessage(tabs[0].id, { type: 'REGENERATE_GRID' }).catch(() => {});
     });
     sendResponse({ success: true });
     return false;
+  }
+
+  if (message.type === 'SET_VIEW') {
+    ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        ext.tabs.sendMessage(tabs[0].id, { type: 'SET_VIEW', view: message.view }).catch(() => {});
+      }
+    });
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.type === 'GET_CURRENT_VIEW') {
+    ext.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (!tabs[0]) {
+        sendResponse({ view: null, hasGrid: false });
+        return;
+      }
+      try {
+        const res = await ext.tabs.sendMessage(tabs[0].id, { type: 'GET_CURRENT_VIEW' });
+        sendResponse(res || { view: null, hasGrid: false });
+      } catch {
+        sendResponse({ view: null, hasGrid: false });
+      }
+    });
+    return true;
   }
 
   if (message.type === 'RECALIBRATE') {

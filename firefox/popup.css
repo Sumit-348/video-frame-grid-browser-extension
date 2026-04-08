@@ -165,6 +165,51 @@ body {
 .secondary-btn:hover { background: rgba(108, 92, 231, 0.25); }
 .secondary-btn.hidden { display: none; }
 
+/* View selector */
+.view-section.hidden { display: none; }
+
+.view-selector {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.view-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #888;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.view-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+}
+
+.view-option.active {
+  background: rgba(108, 92, 231, 0.18);
+  border-color: rgba(108, 92, 231, 0.4);
+  color: #fff;
+}
+
+.view-option svg {
+  flex-shrink: 0;
+}
+
 /* iOS picker */
 .picker-wrapper {
   position: relative;

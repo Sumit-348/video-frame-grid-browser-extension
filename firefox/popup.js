@@ -13,6 +13,8 @@ const pickerNumber = document.getElementById('pickerNumber');
 const pickerUnit = document.getElementById('pickerUnit');
 const shortcutDisplay = document.getElementById('shortcutDisplay');
 const shortcutEditBtn = document.getElementById('shortcutEditBtn');
+const viewSection = document.getElementById('viewSection');
+const viewOptions = document.querySelectorAll('.view-option');
 
 let currentDomain = null;
 let initialInterval = null;
@@ -111,10 +113,44 @@ function setEnabledUI(enabled) {
   } else {
     domainToggle.classList.remove('active');
     regenerateBtn.classList.add('hidden');
+    viewSection.classList.add('hidden');
     statusText.textContent = 'Click to enable';
     statusText.classList.remove('success');
   }
 }
+
+// =============================================
+// View selector
+// =============================================
+async function loadCurrentView() {
+  try {
+    const res = await ext.runtime.sendMessage({ type: 'GET_CURRENT_VIEW' });
+    if (res && res.hasGrid) {
+      viewSection.classList.remove('hidden');
+      highlightView(res.view);
+    } else {
+      viewSection.classList.add('hidden');
+    }
+  } catch {
+    viewSection.classList.add('hidden');
+  }
+}
+
+function highlightView(view) {
+  viewOptions.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+}
+
+viewOptions.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const view = btn.dataset.view;
+    highlightView(view);
+    await ext.runtime.sendMessage({ type: 'SET_VIEW', view });
+    // Close popup so user can see the result
+    setTimeout(() => window.close(), 200);
+  });
+});
 
 // =============================================
 // Domain toggle
@@ -233,6 +269,7 @@ async function init() {
   });
 
   loadShortcut();
+  loadCurrentView();
 }
 
 init();

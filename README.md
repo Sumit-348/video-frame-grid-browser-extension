@@ -63,9 +63,12 @@ Click the icon when it's purple to turn it off. The icon returns to grayscale.
 
 ---
 
-## Two Views
+## Three Views
 
-The grid has two layouts. Use the **view toggle button** in the grid header (left of the minimize button) to switch between them. Your preference is remembered per site.
+The grid has three layouts. You can switch between them in two ways:
+
+1. **From the popup** — click the extension icon and pick Side, Below, or Float from the View selector
+2. **From the grid header** — click the view-toggle button to cycle through them
 
 ### Side view (default)
 The grid sits to the **right of the video**, matching its height. Frames are stacked vertically, one per row, scrollable. Pushes the recommended videos sidebar down.
@@ -73,19 +76,29 @@ The grid sits to the **right of the video**, matching its height. Frames are sta
 ### Below view
 The grid sits **directly below the video**, matching its width. Frames are arranged in **3 columns**. Pushes the title and description down.
 
+### Floating view
+A **draggable floating panel** in the corner of the screen. Useful when the page layout doesn't accommodate the other views, or when you want it visible regardless of where you scroll. Drag it by the header to move it anywhere.
+
+The extension picks the best view automatically based on the page layout. On YouTube and similar sites, it uses side view by default. On full-width-video sites, it falls back to below view, and if even that's not possible, it uses the floating view.
+
+If you pick Side or Below from the popup but the page doesn't allow that view, the extension automatically falls back to Float. **Float is always guaranteed to work** since it attaches to the page body.
+
 ---
 
 ## Settings
 
-Right-click the extension icon and choose **Options** to access settings:
+Click the extension icon to open the popup, which contains:
 
+- **This site toggle** — enable or disable the extension for the current domain
+- **Generate / Refresh Grid** — manually trigger grid generation (useful if auto-trigger missed)
+- **View** — switch between Side, Below, and Float views (only shown when a grid is active)
 - **Frame interval** — iOS-style scroll wheel picker. Set any combination of 1–60 sec/min/hrs.
 - **Recalibrate Grid** — appears after changing the interval; regenerates the grid with the new value.
 - **Keyboard shortcut** — view your current shortcut and customize it.
 
 ### Customizing the keyboard shortcut
 
-Click **Customize shortcut** in the Options panel. This opens your browser's extension shortcut settings page.
+Click the pencil icon next to the shortcut display in the popup. This opens your browser's extension shortcut settings page.
 
 > **Important:** Avoid common video player shortcuts like `K`, `M`, `J`, `L`, `space`, `F`, `C`, or arrow keys. Browser extensions claim shortcuts globally, so binding any of these will hijack the player's controls. Use modifier combos like `Alt+G`, `Ctrl+Shift+V`, etc.
 
@@ -110,13 +123,23 @@ Click **Customize shortcut** in the Options panel. This opens your browser's ext
 
 ---
 
+## What's New in 1.2.1
+
+- **Smarter site compatibility** — works on many more sites that have unusual layouts (full-width video, wrappers with absolute positioning, custom video player elements). New insertion logic uses both width-growth and height-growth detection to figure out where the player wrapper ends and the page content begins
+- **Three views** — Side, Below, and Float. The extension auto-picks the best one for the current page layout
+- **Floating mode** — for sites with no sidebar AND no good place to insert below, the grid appears as a draggable floating panel (drag by the header). Float is also always available as a manual choice
+- **Direct view selection in the popup** — click the extension icon to pick Side, Below, or Float directly. No more cycling through to find the one you want
+- **Smarter video detection** — skips hidden, zero-sized, or unplayable `<video>` elements (e.g. on thumbnail pages where a hidden video tag is used for previews)
+- **View toggle button still cycles all three** in the grid header for quick switching
+- **No more per-domain view memory** — every page starts in auto-pick mode. Avoids stale preferences from earlier sessions
+
 ## What's New in 1.1.0
 
 - **Click-to-toggle popup** — pin the extension and click the icon to open a popup with a clean toggle, interval picker, generate button, and shortcut display
 - **Auto-trigger on enable** — page reloads and the grid generates automatically
 - **Automatic grid regeneration** — when a new video starts playing (SPA navigation, autoplay next, or reload), the grid rebuilds automatically with no user interaction
 - **Customizable keyboard shortcut** — replace the old hardcoded `G` key with anything you want (default `Alt+G`)
-- **Two view modes** — side view (next to the video) or below view (3-column grid under the video), per-domain memory
+- **Two view modes** — side view (next to the video) or below view (3-column grid under the video)
 - **Side view properly sized** — matches video height with scrollable frame list
 - **More accurate frame capture** — uses `requestVideoFrameCallback` and duplicate detection to fix the "same frame repeating" bug
 - **Cached frames across view switches** — toggling between side and below view no longer recaptures frames

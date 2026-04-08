@@ -43,6 +43,35 @@
       Generate / Refresh Grid
     </button>
 
+    <!-- View selector (only when grid is active) -->
+    <div class="section view-section hidden" id="viewSection">
+      <label class="section-label">View</label>
+      <div class="view-selector">
+        <button class="view-option" data-view="side">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="1" y="2" width="9" height="12" rx="1"/>
+            <rect x="11.5" y="2" width="3.5" height="12" rx="0.5"/>
+          </svg>
+          <span>Side</span>
+        </button>
+        <button class="view-option" data-view="below">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="1" width="12" height="8" rx="1"/>
+            <rect x="2" y="10.5" width="12" height="4.5" rx="0.5"/>
+          </svg>
+          <span>Below</span>
+        </button>
+        <button class="view-option" data-view="float">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="4" width="10" height="8" rx="1"/>
+            <circle cx="6" cy="6" r="0.6" fill="currentColor"/>
+          </svg>
+          <span>Float</span>
+        </button>
+      </div>
+      <p class="hint" id="viewHint">Side and Below may fall back to Float if the page layout doesn't allow them.</p>
+    </div>
+
     <div class="divider"></div>
 
     <!-- Interval picker -->
@@ -79,7 +108,7 @@
       <p class="hint">Avoid keys like K, M, J, L, Space, F, C — they conflict with video player controls.</p>
     </div>
 
-    <div class="footer">v1.1.0</div>
+    <div class="footer">v1.2.1</div>
   </div>
 
   <script src="popup.js"></script>

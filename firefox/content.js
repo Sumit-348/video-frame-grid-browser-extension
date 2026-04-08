@@ -1,4 +1,4 @@
-/* content.js — Video Frame Grid v1.1.1 */
+/* content.js — Video Frame Grid v1.2.0 */
 
 (() => {
   'use strict';
@@ -10,9 +10,9 @@
   // ============================================
   let isEnabled = false;
   let captureInterval = 30;
-  let currentView = 'side'; // 'side' | 'below'
+  let currentView = 'side'; // 'side' | 'below' | 'float' — session-only, not persisted
   let activeGrid = null;
-  let cachedFrames = null; // { frames, video, interval } — survives view switches
+  let cachedFrames = null;
   let autoTriggered = false;
 
   // ============================================
@@ -31,12 +31,10 @@
       captureInterval = res.interval || 30;
     } catch {}
 
-    try {
-      const res = await ext.runtime.sendMessage({ type: 'GET_DOMAIN_VIEW', domain });
-      currentView = res.view || 'side';
-    } catch {}
+    // View is no longer persisted per-domain. Always start with 'side'.
+    currentView = 'side';
 
-    ext.runtime.onMessage.addListener((msg) => {
+    ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.type === 'DOMAIN_ENABLED') {
         isEnabled = true;
       }
@@ -54,6 +52,13 @@
       if (msg.type === 'RECALIBRATE') {
         regenerateNow();
       }
+      if (msg.type === 'SET_VIEW') {
+        setView(msg.view);
+      }
+      if (msg.type === 'GET_CURRENT_VIEW') {
+        sendResponse({ view: activeGrid ? currentView : null, hasGrid: !!activeGrid });
+        return false;
+      }
     });
 
     if (isEnabled) {
@@ -66,6 +71,7 @@
   async function regenerateNow() {
     if (activeGrid) destroyGrid();
     cachedFrames = null;
+    currentView = 'side'; // reset to default each generation
     const video = await waitForVideo(8000);
     if (video) generateGrid(video);
   }
@@ -86,7 +92,7 @@
       const start = Date.now();
       const check = () => {
         const v = findBestVideo();
-        if (v && v.readyState >= 1 && v.duration && isFinite(v.duration) && v.duration > 0) {
+        if (v && isUsableVideo(v)) {
           return resolve(v);
         }
         if (Date.now() - start > timeoutMs) return resolve(null);
@@ -104,105 +110,194 @@
         autoTriggered = false;
         if (activeGrid) destroyGrid();
         cachedFrames = null;
-        // If extension is enabled on this domain, auto-regenerate for the new video
         if (isEnabled) {
-          // Small delay to let the page transition settle
           setTimeout(() => autoTriggerWhenReady(), 800);
         }
       }
     }, 800);
   }
 
+  // ============================================
+  // Video detection — smarter
+  // ============================================
+  function isVideoVisible(v) {
+    if (!v) return false;
+    const cs = getComputedStyle(v);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) {
+      return false;
+    }
+    const rect = v.getBoundingClientRect();
+    if (rect.width < 100 || rect.height < 60) return false;
+    return true;
+  }
+
+  function isUsableVideo(v) {
+    if (!v) return false;
+    if (!isVideoVisible(v)) return false;
+    if (v.readyState < 1) return false;
+    if (!v.duration || !isFinite(v.duration) || v.duration <= 0) return false;
+    return true;
+  }
+
   function findBestVideo() {
     const videos = Array.from(document.querySelectorAll('video'));
     if (!videos.length) return null;
+
+    // Filter to visible videos with metadata loaded
+    const candidates = videos.filter(v => isVideoVisible(v) && v.readyState >= 1);
+    if (candidates.length === 0) {
+      // Nothing usable yet — return null so caller can keep waiting
+      return null;
+    }
+
+    // Pick the largest visible one
     let best = null;
     let bestArea = 0;
-    for (const v of videos) {
-      if (v.readyState < 1) continue;
+    for (const v of candidates) {
       const rect = v.getBoundingClientRect();
       const area = rect.width * rect.height;
       if (area > bestArea) { bestArea = area; best = v; }
     }
-    return best || videos[0];
+    return best;
   }
 
   // ============================================
-  // Insertion points
+  // Insertion strategy
   // ============================================
-  // For BELOW view: insert directly after video container in main column
+
+  // Try to find a sidebar (an element to the right of the video)
+  // Returns { container, insertionMode } or null
+  function findSidebar(video) {
+    const hostname = location.hostname;
+    const videoRect = video.getBoundingClientRect();
+    const viewportW = document.documentElement.clientWidth;
+
+    // Hard requirement: video must not span full width
+    // If video right edge is within 50px of viewport, no room for sidebar
+    if (viewportW - videoRect.right < 200) return null;
+
+    // YouTube — explicit
+    if (hostname.includes('youtube.com')) {
+      const yt = document.querySelector('#secondary-inner, #secondary, ytd-watch-next-secondary-results-renderer');
+      if (yt && yt.getBoundingClientRect().width > 200) {
+        return { container: yt, mode: 'prepend' };
+      }
+    }
+
+    // Generic: walk up from the video and look for sibling elements that are
+    // (a) to the right of the video, (b) wide enough to host a sidebar
+    let cur = video;
+    for (let depth = 0; depth < 14; depth++) {
+      const parent = cur.parentElement;
+      if (!parent || parent === document.body || parent === document.documentElement) break;
+
+      const siblings = Array.from(parent.children);
+      for (const sib of siblings) {
+        if (sib === cur) continue;
+        if (sib.contains(video)) continue;
+
+        const r = sib.getBoundingClientRect();
+        // Must be visibly to the right and have real dimensions
+        if (r.left >= videoRect.right - 30 && r.width >= 200 && r.height >= 200) {
+          // Check it's actually visible
+          const cs = getComputedStyle(sib);
+          if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+          return { container: sib, mode: 'prepend' };
+        }
+      }
+      cur = parent;
+    }
+
+    return null;
+  }
+
+  // Try to find a "below" insertion point — somewhere we can insert
+  // between the video container and the next content block
   function findBelowInsertionPoint(video) {
     const hostname = location.hostname;
 
+    // YouTube — explicit
     if (hostname.includes('youtube.com')) {
-      const targets = [
-        '#player-container-outer',
-        '#player-container-inner',
-        '#player',
-        'ytd-player',
-        '#movie_player'
-      ];
+      const targets = ['#player-container-outer', '#player-container-inner', '#player', 'ytd-player', '#movie_player'];
       for (const sel of targets) {
         const el = document.querySelector(sel);
         if (el && el.parentElement) return { parent: el.parentElement, after: el };
       }
     }
 
+    // Vimeo — explicit
     if (hostname.includes('vimeo.com')) {
       const pw = video.closest('.player_area, .player-area, [data-player]');
       if (pw && pw.parentElement) return { parent: pw.parentElement, after: pw };
     }
 
-    let candidate = video;
-    for (let i = 0; i < 8; i++) {
-      const parent = candidate.parentElement;
-      if (!parent || parent === document.body) break;
-      const width = parent.getBoundingClientRect().width;
-      const display = getComputedStyle(parent).display;
-      if (width >= 400 && (display === 'block' || display === 'flex' || display === 'grid')) {
-        return { parent: parent.parentElement || document.body, after: parent };
+    // Generic: walk up the ancestor chain. The KEY insight is that the player
+    // wrapper has both WIDTH and HEIGHT close to the video. We exit the player
+    // wrapper when EITHER:
+    //   (a) width grows substantially (>1.3x) — multi-column layouts
+    //   (b) height grows substantially (>2.5x) — single-column layouts
+    const videoRect = video.getBoundingClientRect();
+    const videoWidth = videoRect.width;
+    const videoHeight = videoRect.height;
+    let cur = video;
+    let topPlayerWrapper = null;
+
+    for (let depth = 0; depth < 14; depth++) {
+      const parent = cur.parentElement;
+      if (!parent || parent === document.body || parent === document.documentElement) break;
+
+      const r = parent.getBoundingClientRect();
+      const cs = getComputedStyle(parent);
+
+      // Skip degenerate parents
+      if (r.width < 100 || r.height < 60) {
+        cur = parent;
+        continue;
       }
-      candidate = parent;
-    }
-    const fp = video.parentElement;
-    return { parent: fp?.parentElement || document.body, after: fp || video };
-  }
-
-  // For SIDE view: insert at top of the secondary/sidebar column so it pushes recommendations down
-  function findSideInsertionPoint(video) {
-    const hostname = location.hostname;
-
-    if (hostname.includes('youtube.com')) {
-      // YouTube secondary column
-      const secondary = document.querySelector('#secondary-inner, #secondary, ytd-watch-next-secondary-results-renderer');
-      if (secondary) {
-        return { parent: secondary, prepend: true };
+      if (cs.display === 'none' || cs.visibility === 'hidden') {
+        cur = parent;
+        continue;
       }
-    }
 
-    // Generic: find sibling to the right of the video at a high enough level
-    let candidate = video;
-    for (let i = 0; i < 6; i++) {
-      const parent = candidate.parentElement;
-      if (!parent || parent === document.body) break;
-      // Look for siblings that might be the sidebar
-      const siblings = Array.from(parent.children).filter(c => c !== candidate);
-      for (const sib of siblings) {
-        const rect = sib.getBoundingClientRect();
-        const vidRect = video.getBoundingClientRect();
-        if (rect.left >= vidRect.right - 10 && rect.width > 200) {
-          return { parent: sib, prepend: true };
+      // Skip absolutely positioned wrappers — they're not in normal flow
+      if (cs.position === 'absolute' || cs.position === 'fixed') {
+        cur = parent;
+        continue;
+      }
+
+      const widerThanVideo = r.width > videoWidth * 1.3;
+      const muchTallerThanVideo = r.height > videoHeight * 2.5;
+
+      // Exit condition: this parent is clearly page content, not the player wrapper
+      if (widerThanVideo || muchTallerThanVideo) {
+        if (topPlayerWrapper && topPlayerWrapper.parentElement) {
+          return { parent: topPlayerWrapper.parentElement, after: topPlayerWrapper };
         }
+        // No player wrapper tracked yet — insert after the current child of this parent
+        return { parent: parent, after: cur };
       }
-      candidate = parent;
+
+      // Still inside the player area
+      topPlayerWrapper = parent;
+      cur = parent;
     }
 
-    // Fallback: insert below
+    // Walked all the way up without finding a clear page-content boundary.
+    // Insert after the deepest player wrapper we found.
+    if (topPlayerWrapper && topPlayerWrapper.parentElement) {
+      return { parent: topPlayerWrapper.parentElement, after: topPlayerWrapper };
+    }
+
+    // Last resort: video's immediate parent
+    const fp = video.parentElement;
+    if (fp && fp.parentElement) {
+      return { parent: fp.parentElement, after: fp };
+    }
     return null;
   }
 
   // ============================================
-  // Generate Grid (capture frames + render)
+  // Generate Grid
   // ============================================
   async function generateGrid(video) {
     if (!video || !video.duration || video.duration === Infinity) return;
@@ -212,7 +307,9 @@
     const frameCount = Math.max(1, Math.floor(duration / interval));
     const maxFrames = Math.min(frameCount, 200);
 
-    // Build the wrapper FIRST so user sees loading state
+    // Determine which view to use BEFORE building the wrapper
+    currentView = pickInitialView(video);
+
     const wrapper = buildWrapper(maxFrames, interval);
     await insertWrapper(video, wrapper);
     activeGrid = { video, wrapper, shadow: wrapper.shadowRoot, minimized: false };
@@ -220,18 +317,27 @@
     const grid = wrapper.shadowRoot.querySelector('.vfg-grid');
     const loading = wrapper.shadowRoot.querySelector('.vfg-loading');
 
-    // Capture frames
     const frames = await captureFrames(video, loading, maxFrames, interval, duration);
-    if (!activeGrid) return; // user closed during capture
+    if (!activeGrid) return;
 
     cachedFrames = { frames, video, interval };
     renderFrames(grid, frames, video);
 
     watchVideoSource(video);
-    watchVideoResize(video, wrapper);
+    if (currentView === 'side') watchVideoResize(video, wrapper);
   }
 
-  // Render-only path (no capture) — used by view switch
+  // Decide which view to use based on what's actually possible on this page
+  function pickInitialView(video) {
+    const sidebar = findSidebar(video);
+    if (sidebar) return 'side';
+
+    const below = findBelowInsertionPoint(video);
+    if (below) return 'below';
+
+    return 'float';
+  }
+
   async function renderFromCache(video) {
     if (!cachedFrames) return false;
 
@@ -245,7 +351,7 @@
     if (loading) loading.remove();
 
     renderFrames(grid, frames, video);
-    watchVideoResize(video, wrapper);
+    if (currentView === 'side') watchVideoResize(video, wrapper);
     return true;
   }
 
@@ -280,7 +386,7 @@
 
     const viewBtn = document.createElement('button');
     viewBtn.className = 'vfg-btn vfg-view-toggle';
-    viewBtn.title = currentView === 'side' ? 'Switch to below view' : 'Switch to side view';
+    viewBtn.title = 'Switch view';
     viewBtn.appendChild(buildViewIcon(currentView));
     viewBtn.addEventListener('click', () => switchView());
 
@@ -312,41 +418,110 @@
     loading.textContent = 'Capturing frames...';
     grid.appendChild(loading);
 
+    // Make floating mode draggable via header
+    if (currentView === 'float') {
+      makeDraggable(wrapper, header);
+    }
+
     return wrapper;
   }
 
   // ============================================
-  // Insert wrapper into the page
+  // Drag-to-move support for floating mode
+  // ============================================
+  function makeDraggable(wrapper, dragHandle) {
+    let dragging = false;
+    let startX = 0, startY = 0;
+    let origLeft = 0, origTop = 0;
+
+    dragHandle.style.cursor = 'move';
+
+    dragHandle.addEventListener('mousedown', (e) => {
+      // Don't start drag if clicking a button
+      if (e.target.closest('.vfg-btn')) return;
+      dragging = true;
+      const r = wrapper.getBoundingClientRect();
+      origLeft = r.left;
+      origTop = r.top;
+      startX = e.clientX;
+      startY = e.clientY;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 100, origLeft + dx));
+      const newTop = Math.max(0, Math.min(window.innerHeight - 50, origTop + dy));
+      wrapper.style.left = newLeft + 'px';
+      wrapper.style.top = newTop + 'px';
+      wrapper.style.right = 'auto';
+      wrapper.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => {
+      dragging = false;
+    });
+  }
+
+  // ============================================
+  // Insert wrapper
   // ============================================
   async function insertWrapper(video, wrapper) {
     if (currentView === 'side') {
-      // Wait for sidebar to exist (YouTube renders it lazily on SPA navs)
-      const sideInsertion = await waitForSideInsertion(video, 5000);
-      if (sideInsertion) {
-        if (sideInsertion.prepend) {
-          sideInsertion.parent.insertBefore(wrapper, sideInsertion.parent.firstChild);
+      // Wait briefly for sidebar to materialize (some sites lazy-load)
+      const sidebar = await waitForSidebar(video, 3000);
+      if (sidebar) {
+        if (sidebar.mode === 'prepend') {
+          sidebar.container.insertBefore(wrapper, sidebar.container.firstChild);
         } else {
-          sideInsertion.parent.appendChild(wrapper);
+          sidebar.container.appendChild(wrapper);
         }
         applyVideoHeight(video, wrapper);
         return;
       }
-      // Fallback: insert below
+      // Sidebar disappeared between pickInitialView and now — fall back
+      currentView = 'below';
+      updateContainerView(wrapper);
     }
 
-    const belowInsertion = findBelowInsertionPoint(video);
-    if (belowInsertion.after.nextSibling) {
-      belowInsertion.parent.insertBefore(wrapper, belowInsertion.after.nextSibling);
-    } else {
-      belowInsertion.parent.appendChild(wrapper);
+    if (currentView === 'below') {
+      const insertion = findBelowInsertionPoint(video);
+      if (insertion && insertion.parent) {
+        if (insertion.after && insertion.after.nextSibling) {
+          insertion.parent.insertBefore(wrapper, insertion.after.nextSibling);
+        } else {
+          insertion.parent.appendChild(wrapper);
+        }
+        return;
+      }
+      // Fall through to float
+      currentView = 'float';
+      updateContainerView(wrapper);
     }
+
+    // Float mode: append to body with fixed positioning
+    document.body.appendChild(wrapper);
+    // Default position: top-right
+    wrapper.style.top = '60px';
+    wrapper.style.right = '20px';
+    wrapper.style.left = 'auto';
   }
 
-  function waitForSideInsertion(video, timeoutMs = 5000) {
+  function updateContainerView(wrapper) {
+    const container = wrapper.shadowRoot?.querySelector('.vfg-container');
+    if (!container) return;
+    container.classList.remove('vfg-view-side', 'vfg-view-below', 'vfg-view-float');
+    container.classList.add(`vfg-view-${currentView}`);
+    wrapper.dataset.view = currentView;
+  }
+
+  function waitForSidebar(video, timeoutMs = 3000) {
     return new Promise((resolve) => {
       const start = Date.now();
       const check = () => {
-        const found = findSideInsertionPoint(video);
+        const found = findSidebar(video);
         if (found) return resolve(found);
         if (Date.now() - start > timeoutMs) return resolve(null);
         setTimeout(check, 200);
@@ -355,13 +530,11 @@
     });
   }
 
-  // Match the side wrapper height to the video height
   function applyVideoHeight(video, wrapper) {
     if (currentView !== 'side') return;
     const rect = video.getBoundingClientRect();
     const h = Math.max(200, Math.round(rect.height));
     wrapper.style.setProperty('--vfg-side-max-height', `${h}px`);
-    // Also set directly on the shadow DOM container for reliability
     const container = wrapper.shadowRoot?.querySelector('.vfg-container');
     if (container) {
       container.style.setProperty('--vfg-side-max-height', `${h}px`);
@@ -370,7 +543,6 @@
     }
   }
 
-  // Track resizing of the video element so the side panel resizes with it
   let videoResizeObserver = null;
   function watchVideoResize(video, wrapper) {
     if (videoResizeObserver) {
@@ -378,20 +550,16 @@
       videoResizeObserver = null;
     }
     if (currentView !== 'side' || typeof ResizeObserver === 'undefined') return;
-    videoResizeObserver = new ResizeObserver(() => {
-      applyVideoHeight(video, wrapper);
-    });
+    videoResizeObserver = new ResizeObserver(() => applyVideoHeight(video, wrapper));
     videoResizeObserver.observe(video);
   }
 
   // ============================================
-  // Render frames into grid
+  // Render frames
   // ============================================
   function renderFrames(grid, frames, video) {
-    // Clear loading if still there
     const loading = grid.querySelector('.vfg-loading');
     if (loading) loading.remove();
-    // Clear any existing cells
     grid.querySelectorAll('.vfg-cell').forEach(c => c.remove());
 
     for (const frame of frames) {
@@ -427,29 +595,49 @@
   }
 
   // ============================================
-  // Switch view — uses cache, no recapture
+  // Switch view — cycles through all three views
   // ============================================
   async function switchView() {
     if (!activeGrid) return;
     const video = activeGrid.video;
 
-    currentView = currentView === 'side' ? 'below' : 'side';
+    // Cycle: side -> below -> float -> side
+    const next = { side: 'below', below: 'float', float: 'side' };
+    currentView = next[currentView] || 'side';
 
-    try {
-      await ext.runtime.sendMessage({
-        type: 'SET_DOMAIN_VIEW',
-        domain: location.hostname,
-        view: currentView
-      });
-    } catch {}
-
-    // Destroy current grid (DOM only — keep cachedFrames intact)
-    if (activeGrid) {
-      activeGrid.wrapper.remove();
-      activeGrid = null;
+    // Tear down current
+    if (videoResizeObserver) {
+      videoResizeObserver.disconnect();
+      videoResizeObserver = null;
     }
+    activeGrid.wrapper.remove();
+    activeGrid = null;
 
-    // Re-render from cache
+    if (cachedFrames) {
+      await renderFromCache(video);
+    } else {
+      generateGrid(video);
+    }
+  }
+
+  // ============================================
+  // Set view to specific value (from popup)
+  // ============================================
+  async function setView(view) {
+    if (!activeGrid) return;
+    if (view !== 'side' && view !== 'below' && view !== 'float') return;
+    if (view === currentView) return;
+
+    const video = activeGrid.video;
+    currentView = view;
+
+    if (videoResizeObserver) {
+      videoResizeObserver.disconnect();
+      videoResizeObserver = null;
+    }
+    activeGrid.wrapper.remove();
+    activeGrid = null;
+
     if (cachedFrames) {
       await renderFromCache(video);
     } else {
@@ -490,7 +678,6 @@
 
         let hash = quickFrameHash(ctx, thumbWidth, thumbHeight);
         if (hash === lastFrameHash) {
-          // Frame didn't update — wait and try once more
           await sleep(200);
           await waitForFrame(video);
           ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
@@ -598,7 +785,7 @@
   }
 
   // ============================================
-  // Source watcher — auto-regenerate on source change
+  // Source watcher
   // ============================================
   let sourceObserver = null;
   let lastWatchedSrc = null;
@@ -613,28 +800,24 @@
       if (!newSrc || newSrc === lastWatchedSrc) return;
       lastWatchedSrc = newSrc;
 
-      // Debounce — multiple mutations may fire as the player swaps streams
       clearTimeout(regenDebounce);
       regenDebounce = setTimeout(async () => {
         if (!isEnabled) return;
-        // Wait until the new video is actually ready
         const v = await waitForVideoReady(video, 10000);
         if (!v) return;
         if (activeGrid) destroyGrid();
         cachedFrames = null;
         autoTriggered = true;
+        currentView = 'side';
         generateGrid(v);
       }, 600);
     };
 
     sourceObserver = new MutationObserver(onSrcChange);
     sourceObserver.observe(video, { attributes: true, attributeFilter: ['src'] });
-
-    // Also listen for loadedmetadata in case attributes don't change but the stream does
     video.addEventListener('loadedmetadata', onSrcChange);
   }
 
-  // Wait for an existing video element to become ready (after a source swap)
   function waitForVideoReady(video, timeoutMs = 10000) {
     return new Promise((resolve) => {
       const start = Date.now();
@@ -673,11 +856,14 @@
       fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5'
     });
     if (view === 'side') {
-      // Icon shown when current view is 'side' (toggles to 'below')
       svg.appendChild(makeSvgEl('rect', { x: '2', y: '1', width: '12', height: '8', rx: '1' }));
       svg.appendChild(makeSvgEl('rect', { x: '2', y: '10.5', width: '12', height: '4.5', rx: '0.5' }));
+    } else if (view === 'below') {
+      // Show a "float" preview icon — a small detached box
+      svg.appendChild(makeSvgEl('rect', { x: '4', y: '4', width: '10', height: '8', rx: '1' }));
+      svg.appendChild(makeSvgEl('circle', { cx: '6', cy: '6', r: '0.5', fill: 'currentColor' }));
     } else {
-      // Icon shown when current view is 'below' (toggles to 'side')
+      // Float view — show side icon (next will be 'side')
       svg.appendChild(makeSvgEl('rect', { x: '1', y: '2', width: '9', height: '12', rx: '1' }));
       svg.appendChild(makeSvgEl('rect', { x: '11.5', y: '2', width: '3.5', height: '12', rx: '0.5' }));
     }
@@ -690,6 +876,13 @@
         all: initial;
         display: block !important;
         width: 100% !important;
+      }
+
+      :host([data-view="float"]) {
+        position: fixed !important;
+        z-index: 2147483646 !important;
+        width: 360px !important;
+        max-width: 90vw !important;
       }
 
       .vfg-container {
@@ -706,6 +899,14 @@
         flex-direction: column;
         height: var(--vfg-side-max-height, 80vh);
         max-height: var(--vfg-side-max-height, 80vh);
+      }
+
+      .vfg-container.vfg-view-float {
+        display: flex;
+        flex-direction: column;
+        max-height: 75vh;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        border-color: rgba(108, 92, 231, 0.3);
       }
 
       .vfg-header {
@@ -756,7 +957,7 @@
       .vfg-close { background: rgba(255, 70, 70, 0.15); color: #ff6b6b; }
       .vfg-close:hover { background: rgba(255, 70, 70, 0.3); color: #fff; }
 
-      /* SIDE VIEW: 1 col, scrollable */
+      /* SIDE view */
       .vfg-view-side .vfg-grid {
         display: flex;
         flex-direction: column;
@@ -776,18 +977,32 @@
       .vfg-view-side .vfg-grid::-webkit-scrollbar-thumb:hover {
         background: rgba(255,255,255,0.28);
       }
+      .vfg-view-side .vfg-cell { flex-shrink: 0; }
 
-      .vfg-view-side .vfg-cell {
-        flex-shrink: 0;
-      }
-
-      /* BELOW VIEW: 3 cols */
+      /* BELOW view */
       .vfg-view-below .vfg-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 4px;
         padding: 6px;
         background: #0a0a0a;
+      }
+
+      /* FLOAT view */
+      .vfg-view-float .vfg-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+        padding: 6px;
+        background: #0a0a0a;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .vfg-view-float .vfg-grid::-webkit-scrollbar { width: 8px; }
+      .vfg-view-float .vfg-grid::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.18);
+        border-radius: 4px;
       }
 
       .vfg-cell {
